@@ -165,17 +165,26 @@ impl MoveGen {
 
         for &(dx, dy) in &directions {
             let mut path_clear = true;
+            let mut closest_piece: Option<(&Coordinate, &Piece)> = None;
+
             for (target_coord, target_piece) in &board.state {
                 if (target_coord.0.clone() - coord.0.clone()).abs() == (target_coord.1.clone() - coord.1.clone()).abs() &&
                     ((dx > 0 && target_coord.0 > coord.0) || (dx < 0 && target_coord.0 < coord.0)) &&
                     ((dy > 0 && target_coord.1 > coord.1) || (dy < 0 && target_coord.1 < coord.1)) {
-                    if Self::is_opponent_piece(piece, *target_piece) {
-                        moves.push(Move::Normal(coord.clone(), target_coord.clone()));
+                    if closest_piece.is_none() ||
+                        ((target_coord.0.clone() - coord.0.clone()).abs() < (closest_piece.unwrap().0.0.clone() - coord.0.clone()).abs()) {
+                        closest_piece = Some((target_coord, target_piece));
                     }
-                    path_clear = false;
-                    break;
                 }
             }
+
+            if let Some((target_coord, target_piece)) = closest_piece {
+                if Self::is_opponent_piece(piece, *target_piece) {
+                    moves.push(Move::Normal(coord.clone(), target_coord.clone()));
+                }
+                path_clear = false;
+            }
+
             if path_clear {
                 let infinite_move = match (dx, dy) {
                     (1, 1) => Direction::TopRight,

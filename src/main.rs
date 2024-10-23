@@ -10,7 +10,7 @@ fn main() {
     board.show(true);
     board.move_piece(
         Coordinate::new(1, 1),
-        Coordinate(BigInt::parse_bytes(b"-10", 10).unwrap(), BigInt::from(1))
+        Coordinate(BigInt::parse_bytes(b"-4", 10).unwrap(), BigInt::from(1))
     );
     let moves = MoveGen::generate_moves(&board);
     for mv in moves {

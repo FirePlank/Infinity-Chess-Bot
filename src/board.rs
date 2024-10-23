@@ -108,6 +108,16 @@ impl Board {
             // Handle captured piece logic if needed
         }
 
+        // Handle en passant capture
+        if let Piece::WhitePawn | Piece::BlackPawn = self.state.get(&from).unwrap() {
+            if let Some(en_passant_coord) = &self.en_passant {
+                if to == *en_passant_coord {
+                    let capture_coord = Coordinate(to.0.clone(), from.1.clone());
+                    self.state.remove(&capture_coord);
+                }
+            }
+        }
+
         // Move the piece
         let piece = self.state.remove(&from).unwrap();
         self.state.insert(to.clone(), piece);

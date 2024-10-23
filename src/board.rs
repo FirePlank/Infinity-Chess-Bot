@@ -122,6 +122,37 @@ impl Board {
         let piece = self.state.remove(&from).unwrap();
         self.state.insert(to.clone(), piece);
 
+        // Handle castling
+        if piece == Piece::WhiteKing && from == Coordinate::new(5, 1) {
+            if to == Coordinate::new(3, 1) {
+                // Long castling for white
+                let rook_from = Coordinate::new(1, 1);
+                let rook_to = Coordinate::new(4, 1);
+                let rook = self.state.remove(&rook_from).unwrap();
+                self.state.insert(rook_to, rook);
+            } else if to == Coordinate::new(7, 1) {
+                // Short castling for white
+                let rook_from = Coordinate::new(8, 1);
+                let rook_to = Coordinate::new(6, 1);
+                let rook = self.state.remove(&rook_from).unwrap();
+                self.state.insert(rook_to, rook);
+            }
+        } else if piece == Piece::BlackKing && from == Coordinate::new(5, 8) {
+            if to == Coordinate::new(3, 8) {
+                // Long castling for black
+                let rook_from = Coordinate::new(1, 8);
+                let rook_to = Coordinate::new(4, 8);
+                let rook = self.state.remove(&rook_from).unwrap();
+                self.state.insert(rook_to, rook);
+            } else if to == Coordinate::new(7, 8) {
+                // Short castling for black
+                let rook_from = Coordinate::new(8, 8);
+                let rook_to = Coordinate::new(6, 8);
+                let rook = self.state.remove(&rook_from).unwrap();
+                self.state.insert(rook_to, rook);
+            }
+        }
+
         // Update castling rights
         match piece {
             Piece::WhiteKing => self.castling_rights &= !0b1100, // White king moved

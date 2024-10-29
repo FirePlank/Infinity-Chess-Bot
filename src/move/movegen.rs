@@ -2,6 +2,7 @@ use crate::board::{Board, Coordinate, Piece};
 use std::collections::HashMap;
 use num_bigint::BigInt;
 use num_traits::Signed;
+use crate::r#move::encode::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Move {
@@ -10,6 +11,7 @@ pub enum Move {
     EnPassant(Coordinate, Coordinate),
     Promotion(Coordinate, Coordinate, Piece),
     InfiniteMove(Coordinate, Direction),
+    None,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,40 +26,58 @@ pub enum Direction {
     Right,
 }
 
+pub struct MoveList {
+    pub moves: [Move; 256],
+    pub count: i32,
+}
+
+const ARRAY_REPEAT_VALUE: Move = Move::None;
+impl MoveList {
+    pub fn new() -> MoveList {
+        MoveList {
+            moves: [ARRAY_REPEAT_VALUE; 256],
+            count: 0,
+        }
+    }
+    pub fn add(&mut self, move_: Move) {
+        // store move
+        self.moves[self.count as usize] = move_;
+        // increment move count
+        self.count += 1;
+    }
+}
+
 pub struct MoveGen;
 
 impl MoveGen {
-    pub fn generate_moves(board: &Board) -> Vec<Move> {
-        let mut moves = Vec::new();
+    pub fn generate_moves(board: &Board, move_list: &mut MoveList) {
         for (coord, piece) in &board.state {
             if (board.side_to_move && piece.is_white()) || (!board.side_to_move && piece.is_black()) {
                 match piece {
                     Piece::WhitePawn | Piece::BlackPawn => {
-                        moves.extend(Self::generate_pawn_moves(board, coord.clone(), *piece));
+                        Self::generate_pawn_moves(board, coord.clone(), *piece, move_list);
                     }
                     Piece::WhiteRook | Piece::BlackRook => {
-                        moves.extend(Self::generate_rook_moves(board, coord.clone(), *piece));
+                        Self::generate_rook_moves(board, coord.clone(), *piece, move_list);
                     }
                     Piece::WhiteKnight | Piece::BlackKnight => {
-                        moves.extend(Self::generate_knight_moves(board, coord.clone(), *piece));
+                        Self::generate_knight_moves(board, coord.clone(), *piece, move_list);
                     }
                     Piece::WhiteBishop | Piece::BlackBishop => {
-                        moves.extend(Self::generate_bishop_moves(board, coord.clone(), *piece));
+                        Self::generate_bishop_moves(board, coord.clone(), *piece, move_list);
                     }
                     Piece::WhiteQueen | Piece::BlackQueen => {
-                        moves.extend(Self::generate_queen_moves(board, coord.clone(), *piece));
+                        Self::generate_queen_moves(board, coord.clone(), *piece, move_list);
                     }
                     Piece::WhiteKing | Piece::BlackKing => {
-                        moves.extend(Self::generate_king_moves(board, coord.clone(), *piece));
+                        Self::generate_king_moves(board, coord.clone(), *piece, move_list);
                     }
                 }
             }
         }
-        moves
     }
 
-    fn generate_pawn_moves(board: &Board, coord: Coordinate, piece: Piece) -> Vec<Move> {
-        let mut moves = Vec::new();
+    fn generate_pawn_moves(board: &Board, coord: Coordinate, piece: Piece, move_list: &mut MoveList) {
         let direction = if piece == Piece::WhitePawn { 1 } else { -1 };
         let start_row = if piece == Piece::WhitePawn { 2 } else { 7 };
         let promotion_row = if piece == Piece::WhitePawn { 8 } else { 1 };
@@ -66,12 +86,12 @@ impl MoveGen {
         let forward = Coordinate(coord.0.clone(), coord.1.clone() + direction);
         if board.get_piece(&forward).is_none() {
             if forward.1 == BigInt::from(promotion_row) {
-                moves.push(Move::Promotion(coord.clone(), forward.clone(), Piece::WhiteQueen));
-                moves.push(Move::Promotion(coord.clone(), forward.clone(), Piece::WhiteRook));
-                moves.push(Move::Promotion(coord.clone(), forward.clone(), Piece::WhiteKnight));
-                moves.push(Move::Promotion(coord.clone(), forward.clone(), Piece::WhiteBishop));
+                move_list.add(Move::Promotion(coord.clone(), forward.clone(), Piece::WhiteQueen));
+                move_list.add(Move::Promotion(coord.clone(), forward.clone(), Piece::WhiteRook));
+                move_list.add(Move::Promotion(coord.clone(), forward.clone(), Piece::WhiteKnight));
+                move_list.add(Move::Promotion(coord.clone(), forward.clone(), Piece::WhiteBishop));
             } else {
-                moves.push(Move::Normal(coord.clone(), forward.clone()));
+                move_list.add(Move::Normal(coord.clone(), forward.clone()));
             }
         }
 
@@ -79,7 +99,7 @@ impl MoveGen {
         if coord.1 == BigInt::from(start_row) {
             let double_forward = Coordinate(coord.0.clone(), coord.1.clone() + 2 * direction);
             if board.get_piece(&double_forward).is_none() && board.get_piece(&forward).is_none() {
-                moves.push(Move::Normal(coord.clone(), double_forward));
+                move_list.add(Move::Normal(coord.clone(), double_forward.clone()));
             }
         }
 
@@ -90,26 +110,23 @@ impl MoveGen {
             if let Some(target_piece) = board.get_piece(&capture) {
                 if Self::is_opponent_piece(piece, *target_piece) {
                     if capture.1 == BigInt::from(promotion_row) {
-                        moves.push(Move::Promotion(coord.clone(), capture.clone(), Piece::WhiteQueen));
-                        moves.push(Move::Promotion(coord.clone(), capture.clone(), Piece::WhiteRook));
-                        moves.push(Move::Promotion(coord.clone(), capture.clone(), Piece::WhiteKnight));
-                        moves.push(Move::Promotion(coord.clone(), capture.clone(), Piece::WhiteBishop));
+                        move_list.add(Move::Promotion(coord.clone(), capture.clone(), Piece::WhiteQueen));
+                        move_list.add(Move::Promotion(coord.clone(), capture.clone(), Piece::WhiteRook));
+                        move_list.add(Move::Promotion(coord.clone(), capture.clone(), Piece::WhiteKnight));
+                        move_list.add(Move::Promotion(coord.clone(), capture.clone(), Piece::WhiteBishop));
                     } else {
-                        moves.push(Move::Normal(coord.clone(), capture.clone()));
+                        move_list.add(Move::Normal(coord.clone(), capture.clone()));
                     }
                 }
             } else if let Some(en_passant) = board.en_passant.clone() {
                 if capture == en_passant {
-                    moves.push(Move::EnPassant(coord.clone(), capture.clone()));
+                    move_list.add(Move::EnPassant(coord.clone(), capture.clone()));
                 }
             }
         }
-
-        moves
     }
 
-    fn generate_rook_moves(board: &Board, coord: Coordinate, piece: Piece) -> Vec<Move> {
-        let mut moves = Vec::new();
+    fn generate_rook_moves(board: &Board, coord: Coordinate, piece: Piece, move_list: &mut MoveList) {
         let directions = [
             (0, 1),  // Up
             (0, -1), // Down
@@ -134,7 +151,7 @@ impl MoveGen {
 
             if let Some((target_coord, target_piece)) = closest_piece {
                 if Self::is_opponent_piece(piece, *target_piece) {
-                    moves.push(Move::Normal(coord.clone(), target_coord.clone()));
+                    move_list.add(Move::Normal(coord.clone(), target_coord.clone()));
                 }
                 path_clear = false;
             }
@@ -145,17 +162,14 @@ impl MoveGen {
                     (0, -1) => Direction::Bottom,
                     (1, 0) => Direction::Right,
                     (-1, 0) => Direction::Left,
-                    _ => unreachable!(),
+                    _ => unsafe { std::hint::unreachable_unchecked() },
                 };
-                moves.push(Move::InfiniteMove(coord.clone(), infinite_move));
+                move_list.add(Move::InfiniteMove(coord.clone(), infinite_move));
             }
         }
-
-        moves
     }
 
-    fn generate_bishop_moves(board: &Board, coord: Coordinate, piece: Piece) -> Vec<Move> {
-        let mut moves = Vec::new();
+    fn generate_bishop_moves(board: &Board, coord: Coordinate, piece: Piece, move_list: &mut MoveList) {
         let directions = [
             (1, 1),   // Top-right
             (1, -1),  // Bottom-right
@@ -180,7 +194,7 @@ impl MoveGen {
 
             if let Some((target_coord, target_piece)) = closest_piece {
                 if Self::is_opponent_piece(piece, *target_piece) {
-                    moves.push(Move::Normal(coord.clone(), target_coord.clone()));
+                    move_list.add(Move::Normal(coord.clone(), target_coord.clone()));
                 }
                 path_clear = false;
             }
@@ -191,17 +205,14 @@ impl MoveGen {
                     (1, -1) => Direction::BottomRight,
                     (-1, 1) => Direction::TopLeft,
                     (-1, -1) => Direction::BottomLeft,
-                    _ => unreachable!(),
+                    _ => unsafe { std::hint::unreachable_unchecked() },
                 };
-                moves.push(Move::InfiniteMove(coord.clone(), infinite_move));
+                move_list.add(Move::InfiniteMove(coord.clone(), infinite_move));
             }
         }
-
-        moves
     }
 
-    fn generate_knight_moves(board: &Board, coord: Coordinate, piece: Piece) -> Vec<Move> {
-        let mut moves = Vec::new();
+    fn generate_knight_moves(board: &Board, coord: Coordinate, piece: Piece, move_list: &mut MoveList) {
         let knight_moves = [
             (2, 1), (2, -1), (-2, 1), (-2, -1),
             (1, 2), (1, -2), (-1, 2), (-1, -2),
@@ -211,25 +222,20 @@ impl MoveGen {
             let next_coord = Coordinate(coord.0.clone() + dx, coord.1.clone() + dy);
             if let Some(target_piece) = board.get_piece(&next_coord) {
                 if Self::is_opponent_piece(piece, *target_piece) {
-                    moves.push(Move::Normal(coord.clone(), next_coord.clone()));
+                    move_list.add(Move::Normal(coord.clone(), next_coord.clone()));
                 }
             } else {
-                moves.push(Move::Normal(coord.clone(), next_coord.clone()));
+                move_list.add(Move::Normal(coord.clone(), next_coord.clone()));
             }
         }
-
-        moves
     }
 
-    fn generate_queen_moves(board: &Board, coord: Coordinate, piece: Piece) -> Vec<Move> {
-        let mut moves = Vec::new();
-        moves.extend(Self::generate_rook_moves(board, coord.clone(), piece));
-        moves.extend(Self::generate_bishop_moves(board, coord.clone(), piece));
-        moves
+    fn generate_queen_moves(board: &Board, coord: Coordinate, piece: Piece, move_list: &mut MoveList) {
+        Self::generate_rook_moves(board, coord.clone(), piece, move_list);
+        Self::generate_bishop_moves(board, coord.clone(), piece, move_list);
     }
 
-    fn generate_king_moves(board: &Board, coord: Coordinate, piece: Piece) -> Vec<Move> {
-        let mut moves = Vec::new();
+    fn generate_king_moves(board: &Board, coord: Coordinate, piece: Piece, move_list: &mut MoveList) {
         let king_moves = [
             (1, 0), (1, 1), (0, 1), (-1, 1),
             (-1, 0), (-1, -1), (0, -1), (1, -1),
@@ -239,31 +245,29 @@ impl MoveGen {
             let next_coord = Coordinate(coord.0.clone() + BigInt::from(dx), coord.1.clone() + BigInt::from(dy));
             if let Some(target_piece) = board.get_piece(&next_coord) {
                 if Self::is_opponent_piece(piece, *target_piece) {
-                    moves.push(Move::Normal(coord.clone(), next_coord.clone()));
+                    move_list.add(Move::Normal(coord.clone(), next_coord.clone()));
                 }
             } else {
-                moves.push(Move::Normal(coord.clone(), next_coord.clone()));
+                move_list.add(Move::Normal(coord.clone(), next_coord.clone()));
             }
         }
 
         // Castling logic
         if piece == Piece::WhiteKing && coord == Coordinate::new(5, 1) {
             if board.castling_rights & 0b1000 != 0 && board.get_piece(&Coordinate::new(6, 1)).is_none() && board.get_piece(&Coordinate::new(7, 1)).is_none() {
-                moves.push(Move::Castling(coord.clone(), Coordinate::new(7, 1)));
+                move_list.add(Move::Castling(coord.clone(), Coordinate::new(7, 1)));
             }
             if board.castling_rights & 0b0100 != 0 && board.get_piece(&Coordinate::new(4, 1)).is_none() && board.get_piece(&Coordinate::new(3, 1)).is_none() && board.get_piece(&Coordinate::new(2, 1)).is_none() {
-                moves.push(Move::Castling(coord.clone(), Coordinate::new(3, 1)));
+                move_list.add(Move::Castling(coord.clone(), Coordinate::new(3, 1)));
             }
         } else if piece == Piece::BlackKing && coord == Coordinate::new(5, 8) {
             if board.castling_rights & 0b0010 != 0 && board.get_piece(&Coordinate::new(6, 8)).is_none() && board.get_piece(&Coordinate::new(7, 8)).is_none() {
-                moves.push(Move::Castling(coord.clone(), Coordinate::new(7, 8)));
+                move_list.add(Move::Castling(coord.clone(), Coordinate::new(7, 8)));
             }
             if board.castling_rights & 0b0001 != 0 && board.get_piece(&Coordinate::new(4, 8)).is_none() && board.get_piece(&Coordinate::new(3, 8)).is_none() && board.get_piece(&Coordinate::new(2, 8)).is_none() {
-                moves.push(Move::Castling(coord.clone(), Coordinate::new(3, 8)));
+                move_list.add(Move::Castling(coord.clone(), Coordinate::new(3, 8)));
             }
         }
-
-        moves
     }
 
     fn is_opponent_piece(piece: Piece, target_piece: Piece) -> bool {
